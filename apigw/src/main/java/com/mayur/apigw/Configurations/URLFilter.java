@@ -15,8 +15,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.IOException;
+import java.net.*;
+import java.util.Hashtable;
 import java.util.List;
 
 @Slf4j
@@ -26,6 +27,8 @@ public class URLFilter implements GatewayFilter, Ordered {
     @Autowired
     private DiscoveryClient client;
 
+    private DoubleJumpConsistentHash doubleJumpConsistentHash = new DoubleJumpConsistentHash();
+
     @Override
     public int getOrder() {
         return RouteToRequestUrlFilter.ROUTE_TO_URL_FILTER_ORDER + 1;
@@ -34,11 +37,24 @@ public class URLFilter implements GatewayFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         List<ServiceInstance> instances = client.getInstances("hello-server");
+        doubleJumpConsistentHash.update(instances);
         String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() + exchange.getRequest().getRemoteAddress().getPort();
-        int cur = Hashing.consistentHash(ip.hashCode(), instances.size());
-        log.info("{}",cur);
-        String newUrl = "http://" + client.getInstances("hello-server").get(cur).getHost() + ":" + client.getInstances("hello-server").get(cur).getPort()+"/hello";
-        log.info(newUrl);
+        String newUrl = "";
+        do {
+            int cur = Hashing.consistentHash(ip.hashCode(), instances.size());
+            log.info("{}",cur);
+            newUrl = doubleJumpConsistentHash.get(cur);
+            try {
+                URL url = new URL(newUrl);
+                new Socket(url.getHost(), url.getPort()).close();
+                break;
+            } catch (ConnectException connectException) {
+                doubleJumpConsistentHash.remove(newUrl);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            log.info(newUrl);
+        } while (true);
         try {
             exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, new URI(newUrl));
         } catch (URISyntaxException e) {

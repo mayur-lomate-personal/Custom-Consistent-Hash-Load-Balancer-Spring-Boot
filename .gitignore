@@ -1,0 +1,4 @@
+# Project exclude paths
+/apigw/target/
+/eureka-server/target/
+/hello-server/target/
