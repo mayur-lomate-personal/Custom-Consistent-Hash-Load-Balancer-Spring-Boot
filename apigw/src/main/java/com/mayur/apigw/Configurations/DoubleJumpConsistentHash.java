@@ -24,7 +24,7 @@ public class DoubleJumpConsistentHash {
         log.info(servers.toString());
     }
 
-    public void remove(String url) {
+    public synchronized void remove(String url) {
         //changed Position
         serversPos.put(servers.get(servers.size()-1).hashCode(), serversPos.get(url.hashCode()));
         //changing value

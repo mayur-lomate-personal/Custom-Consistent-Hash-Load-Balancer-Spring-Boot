@@ -36,27 +36,29 @@ public class URLFilter implements GatewayFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        List<ServiceInstance> instances = client.getInstances("hello-server");
-        doubleJumpConsistentHash.update(instances);
-        String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() + exchange.getRequest().getRemoteAddress().getPort();
-        String newUrl = "";
-        do {
-            int cur = Hashing.consistentHash(ip.hashCode(), instances.size());
-            log.info("{}",cur);
-            newUrl = doubleJumpConsistentHash.get(cur);
-            try {
-                URL url = new URL(newUrl);
-                new Socket(url.getHost(), url.getPort()).close();
-                break;
-            } catch (ConnectException connectException) {
-                doubleJumpConsistentHash.remove(newUrl);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            log.info(newUrl);
-        } while (true);
+        String instanceURL = "";
+        synchronized (doubleJumpConsistentHash) {
+            List<ServiceInstance> instances = client.getInstances("hello-server");
+            doubleJumpConsistentHash.update(instances);
+            String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() + exchange.getRequest().getRemoteAddress().getPort();
+            do {
+                int cur = Hashing.consistentHash(ip.hashCode(), instances.size());
+                log.info("{}",cur);
+                instanceURL = doubleJumpConsistentHash.get(cur);
+                try {
+                    URL pingUrl = new URL(instanceURL);
+                    new Socket(pingUrl.getHost(), pingUrl.getPort()).close();
+                    break;
+                } catch (ConnectException connectException) {
+                    doubleJumpConsistentHash.remove(instanceURL);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                log.info(instanceURL + " removed");
+            } while (true);
+        }
         try {
-            exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, new URI(newUrl));
+            exchange.getAttributes().put(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR, new URI(instanceURL));
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
