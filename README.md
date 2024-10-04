@@ -1,6 +1,8 @@
 # Consistent Hash based Load Balancing
 
-The current project is an example of consistent hash based load balancer.
+This project implements a high-performance load balancer using a custom consistent hashing algorithm within a Spring Boot framework. The load balancer efficiently distributes incoming traffic across multiple backend servers, optimizing resource utilization and enhancing application performance. By leveraging consistent hashing, the load balancer ensures minimal disruption when servers are added or removed, maintaining a balanced load with improved fault tolerance.
+
+Overall, this project demonstrates the effectiveness of consistent hashing in achieving reliable and efficient load distribution, ultimately improving response times and user experience in high-traffic environments.
 
 # Consistent Hash
 
